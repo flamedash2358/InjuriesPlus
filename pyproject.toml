@@ -23,7 +23,7 @@ dependencies = [
     "pygame-gui~=0.6",
     "requests~=2.28",
     "strenum~=0.4",
-    "ujson~=5.7",
+    "orjson~=3.10",
 ]
 
 [dependency-groups]

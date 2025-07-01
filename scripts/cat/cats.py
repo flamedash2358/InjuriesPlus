@@ -13,7 +13,7 @@ from typing import Dict, List, Any, Optional, Union, Callable
 
 import i18n
 import pygame
-import ujson  # type: ignore
+import scripts.json_shim as ujson  # type: ignore
 
 import scripts.game_structure.localization as pronouns
 from scripts.cat.enums import CatAgeEnum
