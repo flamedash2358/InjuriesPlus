@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: ascii -*-
-import logging
 import random
 from copy import deepcopy
 from itertools import repeat
 from os.path import exists as path_exists
 from random import choice, randint, choices
-from typing import List, Tuple, Optional, Union
+from typing import List, Tuple, Optional
 
 import pygame
 
 from scripts.cat.cats import Cat
-from scripts.cat.enums import CatAgeEnum
+from scripts.cat.enums import CatAge, CatRank
 from scripts.clan import Clan
 from scripts.events_module.event_filters import event_for_tags
 from scripts.events_module.patrol.patrol_event import PatrolEvent
@@ -29,8 +28,6 @@ from scripts.utility import (
     get_special_snippet_list,
     adjust_list_text,
 )
-
-logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------- #
 #                              PATROL CLASS START                              #
@@ -59,9 +56,6 @@ class Patrol:
         # Holds new cats for easy access
         self.new_cats: List[List[Cat]] = []
 
-        # False if no debug patrol set, value if one is set
-        self.debug_patrol: Union[bool, str] = False
-
         # the patrols
         self.HUNTING_SZN = None
         self.HUNTING = None
@@ -89,12 +83,6 @@ class Patrol:
         print("PATROL START ---------------------------------------------------")
 
         self.add_patrol_cats(patrol_cats, game.clan)
-
-        self.debug_patrol = (
-            game.config["patrol_generation"]["debug_ensure_patrol_id"]
-            if game.config["patrol_generation"]["debug_ensure_patrol_id"]
-            else False
-        )
 
         final_patrols, final_romance_patrols = self.get_possible_patrols(
             str(game.clan.current_season).casefold(),
@@ -173,32 +161,32 @@ class Patrol:
         for cat in patrol_cats:
             self.patrol_cats.append(cat)
 
-            if cat.status == "apprentice" or cat.status == "medicine cat apprentice":
+            if cat.status.rank.is_any_apprentice_rank():
                 self.patrol_apprentices.append(cat)
 
-            self.patrol_status_list.append(cat.status)
+            self.patrol_status_list.append(cat.status.rank)
 
-            if cat.status in self.patrol_statuses:
-                self.patrol_statuses[cat.status] += 1
+            if cat.status.rank in self.patrol_statuses:
+                self.patrol_statuses[cat.status.rank] += 1
             else:
-                self.patrol_statuses[cat.status] = 1
+                self.patrol_statuses[cat.status.rank] = 1
 
-            # Combined patrol_statuses categories
-            if cat.status in ("medicine cat", "medicine cat apprentice"):
+            # Combined patrol_statuses catagories
+            if cat.status.rank.is_any_medicine_rank():
                 if "healer cats" in self.patrol_statuses:
                     self.patrol_statuses["healer cats"] += 1
                 else:
                     self.patrol_statuses["healer cats"] = 1
 
-            if cat.status in ("apprentice", "medicine cat apprentice"):
+            if cat.status.rank.is_any_apprentice_rank():
                 if "all apprentices" in self.patrol_statuses:
                     self.patrol_statuses["all apprentices"] += 1
                 else:
                     self.patrol_statuses["all apprentices"] = 1
 
             if (
-                cat.status in ("warrior", "deputy", "leader")
-                and cat.age != CatAgeEnum.ADOLESCENT
+                cat.status.rank.is_any_adult_warrior_like_rank()
+                and cat.age != CatAge.ADOLESCENT
             ):
                 if "normal adult" in self.patrol_statuses:
                     self.patrol_statuses["normal adult"] += 1
@@ -211,30 +199,30 @@ class Patrol:
 
         # DETERMINE PATROL LEADER
         # sets medcat as leader if they're in the patrol
-        if "medicine cat" in self.patrol_status_list:
-            index = self.patrol_status_list.index("medicine cat")
+        if CatRank.MEDICINE_CAT in self.patrol_status_list:
+            index = self.patrol_status_list.index(CatRank.MEDICINE_CAT)
             self.patrol_leader = self.patrol_cats[index]
         # If there is no medicine cat, but there is a medicine cat apprentice, set them as the patrol leader.
         # This prevents warrior from being treated as medicine cats in medicine cat patrols.
-        elif "medicine cat apprentice" in self.patrol_status_list:
-            index = self.patrol_status_list.index("medicine cat apprentice")
+        elif CatRank.MEDICINE_APPRENTICE in self.patrol_status_list:
+            index = self.patrol_status_list.index(CatRank.MEDICINE_APPRENTICE)
             self.patrol_leader = self.patrol_cats[index]
             # then we just make sure that this app will also be app1
             self.patrol_apprentices.remove(self.patrol_leader)
             self.patrol_apprentices = [self.patrol_leader] + self.patrol_apprentices
         # sets leader as patrol leader
-        elif "leader" in self.patrol_status_list:
-            index = self.patrol_status_list.index("leader")
+        elif CatRank.LEADER in self.patrol_status_list:
+            index = self.patrol_status_list.index(CatRank.LEADER)
             self.patrol_leader = self.patrol_cats[index]
-        elif "deputy" in self.patrol_status_list:
-            index = self.patrol_status_list.index("deputy")
+        elif CatRank.DEPUTY in self.patrol_status_list:
+            index = self.patrol_status_list.index(CatRank.DEPUTY)
             self.patrol_leader = self.patrol_cats[index]
         else:
             # Get the oldest cat
             possible_leader = [
                 i
                 for i in self.patrol_cats
-                if i.status not in ("medicine cat apprentice", "apprentice")
+                if not i.status.rank.is_any_apprentice_rank()
             ]
             if possible_leader:
                 # Flip a coin to pick the most experience, or oldest.
@@ -343,7 +331,8 @@ class Patrol:
         # this next one is needed for Classic specifically
         patrol_type = (
             "med"
-            if ["medicine cat", "medicine cat apprentice"] in self.patrol_status_list
+            if [CatRank.MEDICINE_CAT, CatRank.MEDICINE_APPRENTICE]
+            in self.patrol_status_list
             else patrol_type
         )
         patrol_size = len(self.patrol_cats)
@@ -436,12 +425,6 @@ class Patrol:
                     self.generate_patrol_events(self.OTHER_CLAN_HOSTILE)
                 )
 
-        patrol_ids = [patrol.patrol_id for patrol in possible_patrols]
-        if self.debug_patrol and self.debug_patrol not in patrol_ids:
-            print(
-                "DEBUG: requested patrol not present (check spelling/mismatched season, biome, patrol type, new cat flag, other clan relations, disaster setting)"
-            )
-
         final_patrols, final_romance_patrols = self.get_filtered_patrols(
             possible_patrols, biome, camp, current_season, patrol_type
         )
@@ -454,11 +437,14 @@ class Patrol:
                 "All patrol filters regarding location, session, etc. have been removed."
             )
 
-        # This is a debug option. If the patrol_id set in "debug_ensure_patrol" is possible,
+        # This is a debug option. If the patrol_id set isn "debug_ensure_patrol" is possible,
         # make it the *only* possible patrol
-        if self.debug_patrol:
+        if isinstance(game.config["patrol_generation"]["debug_ensure_patrol_id"], str):
             for _pat in final_patrols:
-                if _pat.patrol_id == self.debug_patrol:
+                if (
+                    _pat.patrol_id
+                    == game.config["patrol_generation"]["debug_ensure_patrol_id"]
+                ):
                     patrol_type = choice(_pat.types) if _pat.types != [] else "general"
                     final_patrols = final_romance_patrols = [_pat]
                     print(
@@ -472,7 +458,7 @@ class Patrol:
                 print(
                     f"debug_ensure_patrol_id: "
                     f'"{game.config["patrol_generation"]["debug_ensure_patrol_id"]}" '
-                    f"is not found. Check output for reason."
+                    f"is not found."
                 )
         return final_patrols, final_romance_patrols
 
@@ -483,10 +469,6 @@ class Patrol:
             event_id=patrol.patrol_id,
             patrol_leader=self.patrol_leader,
         ):
-            if self.debug_patrol and self.debug_patrol == patrol.patrol_id:
-                print(
-                    "DEBUG: requested patrol does not meet constraints (relationship type)"
-                )
             return False
 
         if (
@@ -495,16 +477,12 @@ class Patrol:
                 patrol.pl_skill_constraints
             )
         ):
-            if self.debug_patrol and self.debug_patrol == patrol.patrol_id:
-                print("DEBUG: requested patrol does not meet constraints (pl_skill)")
             return False
 
         if (
             patrol.pl_trait_constraints
             and self.patrol_leader.personality.trait not in patrol.pl_trait_constraints
         ):
-            if self.debug_patrol and self.debug_patrol == patrol.patrol_id:
-                print("DEBUG: requested patrol does not meet constraints (pl_trait)")
             return False
 
         return True
@@ -561,7 +539,7 @@ class Patrol:
         for val in values:
             value_check = check_relationship_value(love1, love2, val)
             if (
-                val in ("romantic", "platonic", "admiration", "comfortable", "trust")
+                val in ["romantic", "platonic", "admiration", "comfortable", "trust"]
                 and value_check >= 20
             ):
                 chance_of_romance_patrol -= 1
@@ -602,10 +580,6 @@ class Patrol:
                 continue
 
             if not (patrol.min_cats <= len(self.patrol_cats) <= patrol.max_cats):
-                if self.debug_patrol and self.debug_patrol == patrol.patrol_id:
-                    print(
-                        "DEBUG: requested patrol does not meet constraints (min or max cats range)"
-                    )
                 continue
 
             flag = False
@@ -618,53 +592,25 @@ class Patrol:
                     flag = True
                     break
             if flag:
-                if self.debug_patrol and self.debug_patrol == patrol.patrol_id:
-                    print(
-                        "DEBUG: requested patrol does not meet constraints (min max status)"
-                    )
                 continue
 
             if not event_for_tags(patrol.tags, Cat):
-                if self.debug_patrol and self.debug_patrol == patrol.patrol_id:
-                    print("DEBUG: requested patrol does not meet constraints (tags)")
                 continue
 
             if biome not in patrol.biome and "any" not in patrol.biome:
-                if self.debug_patrol and self.debug_patrol == patrol.patrol_id:
-                    print("DEBUG: requested patrol does not meet constraints (biome)")
                 continue
             if camp not in patrol.camp and "any" not in patrol.camp:
-                if self.debug_patrol and self.debug_patrol == patrol.patrol_id:
-                    print("DEBUG: requested patrol does not meet constraints (camp)")
                 continue
             if current_season not in patrol.season and "any" not in patrol.season:
-                if self.debug_patrol and self.debug_patrol == patrol.patrol_id:
-                    print("DEBUG: requested patrol does not meet constraints (season)")
                 continue
 
             if "hunting" not in patrol.types and patrol_type == "hunting":
-                if self.debug_patrol and self.debug_patrol == patrol.patrol_id:
-                    print(
-                        "DEBUG: requested patrol does not meet constraints (patrol type)"
-                    )
                 continue
             elif "border" not in patrol.types and patrol_type == "border":
-                if self.debug_patrol and self.debug_patrol == patrol.patrol_id:
-                    print(
-                        "DEBUG: requested patrol does not meet constraints (patrol type)"
-                    )
                 continue
             elif "training" not in patrol.types and patrol_type == "training":
-                if self.debug_patrol and self.debug_patrol == patrol.patrol_id:
-                    print(
-                        "DEBUG: requested patrol does not meet constraints (patrol type)"
-                    )
                 continue
             elif "herb_gathering" not in patrol.types and patrol_type == "med":
-                if self.debug_patrol and self.debug_patrol == patrol.patrol_id:
-                    print(
-                        "DEBUG: requested patrol does not meet constraints (patrol type)"
-                    )
                 continue
 
             if "romantic" in patrol.tags:
@@ -709,13 +655,6 @@ class Patrol:
             if herb_filtered_patrols:
                 filtered_patrols = herb_filtered_patrols
                 romantic_patrols = herb_romance_patrols
-
-                if self.debug_patrol and self.debug_patrol not in [
-                    patrol.patrol_id for patrol in filtered_patrols + romantic_patrols
-                ]:
-                    print(
-                        "DEBUG: requested patrol removed during herb filtering (not target herb)"
-                    )
 
         if not filtered_patrols:
             print(
@@ -978,10 +917,6 @@ class Patrol:
 
             if chosen_prey_size == most_prey_size:
                 filtered_patrols.append(patrol)
-            elif self.debug_patrol and self.debug_patrol == patrol.patrol_id:
-                print(
-                    "DEBUG: requested patrol does not meet constraints (failed prey balancing)"
-                )
 
         # if the filtering results in an empty list, don't filter and return whole possible patrols
         if len(filtered_patrols) <= 0:

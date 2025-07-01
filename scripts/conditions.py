@@ -5,6 +5,7 @@ TODO: Docs
 
 
 """
+from scripts.cat.enums import CatRank
 
 # pylint: enable=line-too-long
 
@@ -20,13 +21,14 @@ def amount_clanmembers_covered(all_cats, amount_per_med) -> int:
     medicine_cats = [
         i
         for i in all_cats
-        if not i.dead
-        and not i.outside
+        if i.status.in_player_clan()
         and not i.not_working()
-        and i.status in ["medicine cat", "medicine cat apprentice"]
+        and i.status.rank.is_any_medicine_rank()
     ]
-    full_med = [i for i in medicine_cats if i.status == "medicine cat"]
-    apprentices = [i for i in medicine_cats if i.status == "medicine cat apprentice"]
+    full_med = [i for i in medicine_cats if i.status.rank == CatRank.MEDICINE_CAT]
+    apprentices = [
+        i for i in medicine_cats if i.status.rank == CatRank.MEDICINE_APPRENTICE
+    ]
 
     total_exp = 0
     for cat in medicine_cats:
@@ -41,7 +43,7 @@ def amount_clanmembers_covered(all_cats, amount_per_med) -> int:
             total_med_number += 2
         elif cat.skills.meets_skill_requirement(SkillPath.HEALER, 2):
             total_med_number += 1.75
-        elif cat.skills.meets_skill_requirement(SkillPath.HEALER, 1):
+        elif cat.skills.meets_skill_requirement(SkillPath.HEALER, 2):
             total_med_number += 1.5
         else:
             total_med_number += 1
@@ -57,7 +59,7 @@ def medicine_cats_can_cover_clan(all_cats, amount_per_med) -> bool:
     """
     whether the player has enough meds for the whole clan
     """
-    relevant_cats = [c for c in all_cats if not c.dead and not c.outside]
+    relevant_cats = [c for c in all_cats if c.status.in_player_clan()]
     return amount_clanmembers_covered(all_cats, amount_per_med) > len(relevant_cats)
 
 
