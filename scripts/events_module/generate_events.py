@@ -14,6 +14,7 @@ from scripts.events_module.event_filters import (
     event_for_freshkill_supply,
     event_for_herb_supply,
     event_for_clan_relations,
+    cat_for_event,
 )
 from scripts.events_module.ongoing.ongoing_event import OngoingEvent
 from scripts.events_module.short.short_event import ShortEvent
@@ -35,13 +36,6 @@ def get_resource_directory(fallback=False):
 
 class GenerateEvents:
     loaded_events = {}
-
-    with open(
-        f"resources/dicts/conditions/event_injuries_distribution.json",
-        "r",
-        encoding="utf-8",
-    ) as read_file:
-        INJURY_DISTRIBUTION = ujson.loads(read_file.read())
 
     with open(
         f"resources/dicts/conditions/injuries.json", "r", encoding="utf-8"
@@ -105,12 +99,13 @@ class GenerateEvents:
         GenerateEvents.loaded_events = {}
 
     @staticmethod
-    def generate_short_events(event_triggered, biome):
+    def generate_short_events(event_triggered, biome, weight):
         file_path = f"{event_triggered}/{biome}.json"
+        load_name = f"{file_path}_{weight}"
 
         try:
-            if file_path in GenerateEvents.loaded_events:
-                return GenerateEvents.loaded_events[file_path]
+            if load_name in GenerateEvents.loaded_events:
+                return GenerateEvents.loaded_events[load_name]
             else:
                 events_dict = GenerateEvents.get_short_event_dicts(file_path)
 
@@ -119,6 +114,7 @@ class GenerateEvents:
                     return event_list
                 for event in events_dict:
                     event_text = event["event_text"] if "event_text" in event else None
+                    event_weight = event["weight"] if "weight" in event else 4
                     if not event_text:
                         event_text = (
                             event["death_text"] if "death_text" in event else None
@@ -128,6 +124,10 @@ class GenerateEvents:
                         print(
                             f"WARNING: some events resources which are used in generate_events have no 'event_text'."
                         )
+
+                    if weight != event_weight:
+                        continue
+
                     event = ShortEvent(
                         event_id=event["event_id"] if "event_id" in event else "",
                         location=event["location"] if "location" in event else ["any"],
@@ -163,7 +163,7 @@ class GenerateEvents:
                     event_list.append(event)
 
                 # Add to loaded events.
-                GenerateEvents.loaded_events[file_path] = event_list
+                GenerateEvents.loaded_events[load_name] = event_list
                 return event_list
         except:
             print(f"WARNING: {file_path} was not found, check short event generation")
@@ -218,7 +218,7 @@ class GenerateEvents:
                 return event
 
     @staticmethod
-    def possible_short_events(event_type=None):
+    def possible_short_events(event_type=None, weight=4):
         event_list = []
 
         # skip the rest of the loading if there is an unrecognised biome
@@ -236,10 +236,14 @@ class GenerateEvents:
         biome = temp_biome.lower()
 
         # biome specific events
-        event_list.extend(GenerateEvents.generate_short_events(event_type, biome))
+        event_list.extend(
+            GenerateEvents.generate_short_events(event_type, biome, weight)
+        )
 
         # any biome events
-        event_list.extend(GenerateEvents.generate_short_events(event_type, "general"))
+        event_list.extend(
+            GenerateEvents.generate_short_events(event_type, "general", weight)
+        )
 
         return event_list
 
@@ -248,10 +252,10 @@ class GenerateEvents:
         Cat_class,
         possible_events,
         cat,
-        random_cat,
         other_clan,
         freshkill_active,
         freshkill_trigger_factor,
+        random_cat=None,
         sub_types=None,
         allowed_events=None,
         excluded_events=None,
@@ -289,14 +293,10 @@ class GenerateEvents:
             if excluded_events and event.event_id in excluded_events:
                 continue
 
-            # ensure ID and requirements override
-            if (
-                event.event_id
-                == game.config["event_generation"]["debug_ensure_event_id"]
-                and game.config["event_generation"]["debug_override_requirements"]
-            ):
+            # if requirements are overridden, allow event through
+            if game.config["event_generation"]["debug_override_requirements"]:
                 final_events.append(event)
-                break
+                continue
 
             # check for event sub_type
             if not ignore_subtyping:
@@ -337,87 +337,37 @@ class GenerateEvents:
             if "transition" in event.sub_type and cat.gender != cat.genderalign:
                 continue
 
+            m_c_injuries = []
+            r_c_injuries = []
+            discard = False
+            for block in event.injury:
+                for injury in block["injuries"]:
+                    if "m_c" in block["cats"]:
+                        m_c_injuries.append(injury)
+                    if "r_c" in block["cats"]:
+                        r_c_injuries.append(injury)
+                if discard:
+                    continue
+
+            # check if m_c is allowed this event
             if event.m_c:
                 if not event_for_cat(
                     cat_info=event.m_c,
                     cat=cat,
                     cat_group=[cat, random_cat] if random_cat else None,
                     event_id=event.event_id,
+                    injuries=m_c_injuries,
                 ):
                     continue
-
-            if event.r_c and random_cat:
+            # if a random cat was pre-chosen, then we check if the event will be suitable for them
+            if random_cat:
                 if not event_for_cat(
                     cat_info=event.r_c,
                     cat=random_cat,
                     cat_group=[random_cat, cat],
                     event_id=event.event_id,
+                    injuries=r_c_injuries,
                 ):
-                    continue
-
-            # check that injury is possible
-            if (
-                event.injury
-                and game.config["event_generation"]["debug_type_override"] != "injury"
-            ):
-                # determine which injury severity list will be used
-                allowed_severity = None
-                discard = False
-                if cat.status in GenerateEvents.INJURY_DISTRIBUTION:
-                    minor_chance = GenerateEvents.INJURY_DISTRIBUTION[cat.status][
-                        "minor"
-                    ]
-                    major_chance = GenerateEvents.INJURY_DISTRIBUTION[cat.status][
-                        "major"
-                    ]
-                    severe_chance = GenerateEvents.INJURY_DISTRIBUTION[cat.status][
-                        "severe"
-                    ]
-                    severity_chosen = random.choices(
-                        ["minor", "major", "severe"],
-                        [minor_chance, major_chance, severe_chance],
-                        k=1,
-                    )
-                    if severity_chosen[0] == "minor":
-                        allowed_severity = "minor"
-                    elif severity_chosen[0] == "major":
-                        allowed_severity = "major"
-                    else:
-                        allowed_severity = "severe"
-
-                for block in event.injury:
-                    for injury in block["injuries"]:
-                        if injury in GenerateEvents.INJURIES:
-                            if (
-                                GenerateEvents.INJURIES[injury]["severity"]
-                                != allowed_severity
-                            ):
-                                discard = True
-                                break
-
-                            if "m_c" in block["cats"]:
-                                if injury == "mangled tail" and (
-                                    "NOTAIL" in cat.pelt.scars
-                                    or "HALFTAIL" in cat.pelt.scars
-                                ):
-                                    continue
-
-                                if injury == "torn ear" and "NOEAR" in cat.pelt.scars:
-                                    continue
-                            if "r_c" in block["cats"]:
-                                if injury == "mangled tail" and (
-                                    "NOTAIL" in random_cat.pelt.scars
-                                    or "HALFTAIL" in random_cat.pelt.scars
-                                ):
-                                    continue
-
-                                if (
-                                    injury == "torn ear"
-                                    and "NOEAR" in random_cat.pelt.scars
-                                ):
-                                    continue
-
-                if discard:
                     continue
 
             # check if outsider event is allowed
@@ -480,20 +430,76 @@ class GenerateEvents:
                 if discard:
                     continue
 
-            # ensure ID without requirements override
+            final_events.append(event)
+
+        cat_list = [
+            c
+            for c in Cat_class.all_cats.values()
+            if c.is_alive() and not c.outside and c != cat
+        ]
+        chosen_cat = None
+        chosen_event = None
+
+        if random_cat:
+            chosen_cat = random_cat
+            # if we've got our random cat already, then check if we have to find an ensured event
+            if game.config["event_generation"]["debug_ensure_event_id"]:
+                for event in final_events:
+                    if (
+                        event.event_id
+                        == game.config["event_generation"]["debug_ensure_event_id"]
+                    ):
+                        chosen_event = event
+                        break
+            # else, pick a random one from the available events
+            else:
+                chosen_event = random.choice(final_events) if final_events else None
+
+        while final_events and not chosen_cat and not chosen_event:
+            chosen_event = random.choice(final_events)
+            # if we have an ensured id, only allow that event past
             if (
-                event.event_id
-                == game.config["event_generation"]["debug_ensure_event_id"]
+                game.config["event_generation"]["debug_ensure_event_id"]
+                and game.config["event_generation"]["debug_ensure_event_id"]
+                != chosen_event.event_id
             ):
-                final_events.append(event)
+                final_events.remove(chosen_event)
+                continue
+
+            if not chosen_event.r_c:
                 break
 
-            final_events.extend([event] * event.weight)
+            # if we're overriding requirements, don't bother looking for an appropriate cat
+            if game.config["event_generation"]["debug_override_requirements"]:
+                chosen_cat = random.choice(cat_list)
+                continue
+
+            # gotta gather injuries so we can check if the cat can get them
+            r_c_injuries = []
+            for block in chosen_event.injury:
+                r_c_injuries.extend(block["injuries"] if "r_c" in block["cats"] else [])
+
+            chosen_cat = cat_for_event(
+                constraint_dict=chosen_event.r_c,
+                possible_cats=cat_list,
+                comparison_cat=cat,
+                comparison_cat_rel_status=chosen_event.m_c.get(
+                    "relationship_status", []
+                ),
+                injuries=r_c_injuries,
+                return_id=False,
+            )
+
+            if not chosen_cat:
+                final_events.remove(chosen_event)
+                chosen_event = None
+            else:
+                break
 
         for notice in incorrect_format:
             print(notice)
 
-        return final_events
+        return chosen_event, chosen_cat
 
     @staticmethod
     def possible_ongoing_events(event_type=None, specific_event=None):
