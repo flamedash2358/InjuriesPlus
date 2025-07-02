@@ -78,6 +78,16 @@ class Pelt:
     scars3 = ["SNAKE", "TOETRAP", "BURNPAWS", "BURNTAIL", "BURNBELLY", "BURNRUMP", "FROSTFACE", "FROSTTAIL",
               "FROSTMITT", "FROSTSOCK", "TOE", "SNAKETWO"]
 
+    # wounds from other cats, other animals
+    wounds1 = ["WONE", "WTWO", "WTHREE", "WTAILSCAR", "WSNOUT", "WCHEEK", "WSIDE", "WTHROAT", "WTAILBASE", "WBELLY",
+              "WLEGBITE", "WNECKBITE", "WFACE", "WMANLEG", "WBRIGHTHEART", "WMANTAIL", "WBRIDGE", "WRIGHTBLIND", "WLEFTBLIND",
+              "WBOTHBLIND", "WBEAKCHEEK", "WBEAKLOWER", "WCATBITE", "WRATBITE", "WQUILLCHUNK", "WQUILLSCRATCH", "WHINDLEG",
+              "WBACK", "WQUILLSIDE", "WSCRATCHSIDE", "WBEAKSIDE", "WCATBITETWO", "WFOUR"]
+
+    # "special" wounds that could only happen in a special event
+    wounds3 = ["WSNAKE", "WTOETRAP", "WBURNPAWS", "WBURNTAIL", "WBURNBELLY", "WBURNRUMP", "WFROSTFACE", "WFROSTTAIL",
+              "WFROSTMITT", "WFROSTSOCK", "WTOE", "WSNAKETWO"]
+
     # make sure to add plural and singular forms of new accs to acc_display.json so that they will display nicely
     plant_accessories = ["MAPLE LEAF", "HOLLY", "BLUE BERRIES", "FORGET ME NOTS", "RYE STALK", "CATTAIL", "POPPY", "ORANGE POPPY", "CYAN POPPY", "WHITE POPPY", "PINK POPPY",
                         "BLUEBELLS", "LILY OF THE VALLEY", "SNAPDRAGON", "HERBS", "PETALS", "NETTLE", "HEATHER", "GORSE", "JUNIPER", "RASPBERRY", "LAVENDER",
