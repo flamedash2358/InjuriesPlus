@@ -29,6 +29,7 @@ from scripts.utility import (
     get_current_season,
     clan_symbol_sprite,
     get_living_clan_cat_count,
+    logger,
 )  # pylint: disable=redefined-builtin
 from scripts.events_module.future.future_event import FutureEvent
 
@@ -257,7 +258,9 @@ class Clan:
             Cat.all_cats.get(cat_id).backstory = "clan_founder"
             if Cat.all_cats.get(cat_id).status == "apprentice":
                 Cat.all_cats.get(cat_id).status_change("apprentice")
-            Cat.all_cats.get(cat_id).thoughts()
+            Cat.all_cats.get(cat_id).thoughts(
+                game_mode=self.game_mode, biome=self.biome, camp=self.camp_bg
+            )
 
         game.save_cats()
         number_other_clans = randint(3, 5)
@@ -278,19 +281,6 @@ class Clan:
         game.switches["clan_list"] = game.read_clans()
         # if map_available:
         #    save_map(game.map_info, game.clan.name)
-
-        # CHECK IF CAMP BG IS SET -fail-safe in case it gets set to None-
-        if game.switches["camp_bg"] is None:
-            random_camp_options = ["camp1", "camp2"]
-            random_camp = choice(random_camp_options)
-            game.switches["camp_bg"] = random_camp
-
-        # if no game mode chosen, set to Classic
-        if game.switches["game_mode"] is None:
-            game.switches["game_mode"] = "classic"
-            self.game_mode = "classic"
-        # if game.switches['game_mode'] == 'cruel_season':
-        #    game.settings['disasters'] = True
 
         # set the starting season
         season_index = self.seasons.index(self.starting_season)
@@ -832,6 +822,20 @@ class Clan:
             else "Newleaf"
         )
         get_current_season()
+
+        for cat in Cat.all_cats.values():
+            try:
+                # initialization of thoughts
+                cat.thoughts()
+            except Exception as e:
+                logger.exception(
+                    f"There was an error when thoughts for cat #{cat} are created."
+                )
+                game.switches[
+                    "error_message"
+                ] = f"There was an error when thoughts for cat #{cat} are created."
+                game.switches["traceback"] = e
+                raise
 
         game.clan.leader_lives = leader_lives
         game.clan.leader_predecessors = clan_data["leader_predecessors"]
