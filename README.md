@@ -1,14 +1,16 @@
-# clangen
+# InjuriesPlus
 
 ### [Discord Server](https://discord.gg/clangen) || [Official website](https://clangen.io) || [Itch.io Page](https://sablesteel.itch.io/clan-gen-fan-edit) 
 
 ## Description
-Fan-edit of the warrior cat clangen game built using Python and Pygame.
+A mod of ClanGen that add more onto the current injury sprites/functions
 
 ## Credits
 Original creator: just-some-cat.tumblr.com
 
 Fan-edit creator: SableSteel, and many others
+
+Mod creator: flamedash
 
 ## Downloads
 ### Stable
