@@ -130,6 +130,7 @@ class Sprites:
             "eyes2",
             "skin",
             "scars",
+            "wounds",
             "missingscars",
             "medcatherbs",
             "wild",
@@ -528,6 +529,62 @@ class Sprites:
             ],
         ]
 
+        wounds_data = [
+            [
+                "WONE",
+                "WTWO",
+                "WTHREE",
+                "WMANLEG",
+                "WBRIGHTHEART",
+                "WMANTAIL",
+                "WBRIDGE",
+                "WRIGHTBLIND",
+                "WLEFTBLIND",
+                "WBOTHBLIND",
+                "WBURNPAWS",
+                "WBURNTAIL",
+            ],
+            [
+                "WBURNBELLY",
+                "WBEAKCHEEK",
+                "WBEAKLOWER",
+                "WBURNRUMP",
+                "WCATBITE",
+                "WRATBITE",
+                "WFROSTFACE",
+                "WFROSTTAIL",
+                "WFROSTMITT",
+                "WFROSTSOCK",
+                "WQUILLCHUNK",
+                "WQUILLSCRATCH",
+            ],
+            [
+                "WTAILSCAR",
+                "WSNOUT",
+                "WCHEEK",
+                "WSIDE",
+                "WTHROAT",
+                "WTAILBASE",
+                "WBELLY",
+                "WTOETRAP",
+                "WSNAKE",
+                "WLEGBITE",
+                "WNECKBITE",
+                "WFACE",
+            ],
+            [
+                "WHINDLEG",
+                "WBACK",
+                "WQUILLSIDE",
+                "WSCRATCHSIDE",
+                "WTOE",
+                "WBEAKSIDE",
+                "WCATBITETWO",
+                "WSNAKETWO",
+                "WFOUR",
+            ],
+        ]
+
         # define missing parts
         missing_parts_data = [
             [
@@ -546,6 +603,11 @@ class Sprites:
         for row, scars in enumerate(scars_data):
             for col, scar in enumerate(scars):
                 self.make_group("scars", (col, row), f"scars{scar}")
+
+        # wounds
+        for row, wounds in enumerate(wounds_data):
+            for col, wounds in enumerate(wounds):
+                self.make_group("wounds", (col, row), f"wounds{wounds}")
 
         # missing parts
         for row, missing_parts in enumerate(missing_parts_data):
